@@ -1,6 +1,9 @@
 # Roadmap
 
-后续计划（按优先级大致排列）。完整讨论见 GitHub Issues。
+后续计划（按优先级大致排列）。
+
+- 跟踪 Issue：https://github.com/KaniuBillows/huaci-transform/issues/1
+- 配置同步：https://github.com/KaniuBillows/huaci-transform/issues/2
 
 ## Planned
 
