@@ -1,6 +1,8 @@
 import { createUsageRecord, estimateUsage } from '../lib/billing';
 import { LLM_PORT } from '../lib/port';
 import { chatComplete } from '../lib/openai';
+import { openOptionsPage } from '../lib/options-page';
+import { defaultModelFor } from '../lib/profile';
 import { buildPrompt } from '../lib/prompts';
 import { appendUsage, loadSettings } from '../lib/storage';
 import { nonempty } from '../lib/strings';
@@ -17,11 +19,8 @@ function pickProfile(settings: AppSettings, profileId?: string): ApiProfile {
   return found;
 }
 
-function pickModel(profile: ApiProfile, task: StartTaskMessage['task']): string {
-  if (task === 'explain') {
-    return nonempty(profile.explainModel, profile.translateModel);
-  }
-  return nonempty(profile.translateModel, profile.explainModel);
+function pickModel(profile: ApiProfile, msg: StartTaskMessage): string {
+  return nonempty(msg.model ?? '', defaultModelFor(profile, msg.task));
 }
 
 function post(port: Browser.runtime.Port, event: ServerEvent): void {
@@ -39,7 +38,7 @@ async function runStart(port: Browser.runtime.Port, msg: StartTaskMessage): Prom
     post(port, { type: 'error', requestId: msg.requestId, message: '请先在设置页填写 API Key' });
     return;
   }
-  const model = pickModel(profile, msg.task);
+  const model = pickModel(profile, msg);
   const built = buildPrompt(msg.task, msg.text, settings.translatePrompt, settings.explainPrompt);
   post(port, {
     type: 'meta',
@@ -93,6 +92,10 @@ async function runStart(port: Browser.runtime.Port, msg: StartTaskMessage): Prom
 }
 
 function handleMessage(port: Browser.runtime.Port, raw: ClientMessage): void {
+  if (raw.type === 'open-options') {
+    void openOptionsPage();
+    return;
+  }
   if (raw.type === 'abort') {
     inflight.get(raw.requestId)?.abort();
     inflight.delete(raw.requestId);
@@ -117,5 +120,11 @@ export default defineBackground(() => {
     port.onMessage.addListener((raw) => {
       handleMessage(port, raw as ClientMessage);
     });
+  });
+
+  browser.runtime.onInstalled.addListener((details) => {
+    if (details.reason === 'install') {
+      void openOptionsPage();
+    }
   });
 });

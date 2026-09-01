@@ -9,6 +9,7 @@ export function createEmptyProfile(): ApiProfile {
     apiKey: '',
     translateModel: 'gpt-4o-mini',
     explainModel: 'gpt-4o-mini',
+    models: ['gpt-4o-mini', 'gpt-4o'],
   };
 }
 

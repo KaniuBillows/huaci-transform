@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { ApiProfile, AppSettings } from '../../lib/types';
 import { createEmptyProfile } from '../../lib/defaults';
+import { formatModelList, parseModelList } from '../../lib/profile';
 
 interface Props {
   settings: AppSettings;
@@ -98,6 +99,14 @@ export function ProfilesPanel({ settings, onChange }: Props) {
                 onChange={(e) => patch(current.id, { explainModel: e.target.value })}
               />
             </div>
+            <div className="row">
+              <span className="label">可用模型</span>
+              <textarea
+                value={formatModelList(current.models)}
+                placeholder={'每行一个，例如\ngpt-4o-mini\ngpt-4o'}
+                onChange={(e) => patch(current.id, { models: parseModelList(e.target.value) })}
+              />
+            </div>
           </>
         )}
         <div className="actions">
@@ -107,7 +116,7 @@ export function ProfilesPanel({ settings, onChange }: Props) {
           <button type="button" className="ghost" onClick={add}>新增配置</button>
           <button type="button" className="danger" onClick={() => current && remove(current.id)}>删除当前</button>
         </div>
-        <p className="hint">悬浮窗内可临时切换配置，不必改默认项。</p>
+        <p className="hint">「可用模型」里的模型会出现在悬浮窗下拉里，可随时切换重跑，不必改默认项。</p>
       </div>
     </>
   );

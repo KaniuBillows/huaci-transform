@@ -1,5 +1,9 @@
 import { createDefaultSettings } from './defaults';
-import type { AppSettings, UsageRecord } from './types';
+import type { ApiProfile, AppSettings, UsageRecord } from './types';
+
+function asProfile(raw: ApiProfile): ApiProfile {
+  return { ...raw, models: Array.isArray(raw.models) ? raw.models : [] };
+}
 
 const SETTINGS_KEY = 'transform.settings';
 const USAGE_KEY = 'transform.usage';
@@ -11,7 +15,7 @@ function asSettings(raw: unknown): AppSettings {
   }
   const value = raw as Partial<AppSettings>;
   const profiles = Array.isArray(value.profiles) && value.profiles.length > 0
-    ? value.profiles
+    ? value.profiles.map(asProfile)
     : fallback.profiles;
   const first = profiles[0] ?? fallback.profiles[0];
   if (!first) {

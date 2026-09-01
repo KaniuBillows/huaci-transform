@@ -12,6 +12,8 @@ export interface ApiProfile {
   apiKey: string;
   translateModel: string;
   explainModel: string;
+  /** 该配置下可在悬浮窗直接切换的模型 */
+  models: string[];
 }
 
 /** 单个模型的百万 token 单价。 */
@@ -56,6 +58,8 @@ export interface StartTaskMessage {
   task: TaskKind;
   text: string;
   profileId?: string;
+  /** 覆盖该配置的默认模型 */
+  model?: string;
 }
 
 /** 发给后台的中止消息。 */
@@ -64,8 +68,13 @@ export interface AbortTaskMessage {
   requestId: string;
 }
 
+/** 请求后台打开设置页，内容脚本无法直接调用 tabs API。 */
+export interface OpenOptionsMessage {
+  type: 'open-options';
+}
+
 /** 内容脚本到后台的消息。 */
-export type ClientMessage = StartTaskMessage | AbortTaskMessage;
+export type ClientMessage = StartTaskMessage | AbortTaskMessage | OpenOptionsMessage;
 
 /** 后台推送给内容脚本的事件。 */
 export type ServerEvent =

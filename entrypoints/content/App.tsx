@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { LLM_PORT } from '../../lib/port';
+import { defaultModelFor } from '../../lib/profile';
 import { loadSettings, onSettingsChanged } from '../../lib/storage';
 import type { AppSettings, ClientMessage, ServerEvent, TaskKind } from '../../lib/types';
 import { ResultPanel, type PanelState } from './ResultPanel';
@@ -10,6 +11,20 @@ interface SelectionBox {
   y: number;
   text: string;
 }
+
+interface TaskRequest {
+  task: TaskKind;
+  text: string;
+  profileId: string;
+  model: string;
+  x: number;
+  y: number;
+}
+
+const PANEL_WIDTH = 420;
+const PANEL_HEIGHT = 280;
+const TOOLBAR_WIDTH = 160;
+const TOOLBAR_HEIGHT = 40;
 
 function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
@@ -22,11 +37,14 @@ function layoutPoint(x: number, y: number, width: number, height: number): { x: 
   };
 }
 
-function emptyPanel(task: TaskKind, text: string, profileId: string): PanelState {
+function emptyPanel(req: TaskRequest): PanelState {
   return {
-    task,
-    text,
-    profileId,
+    task: req.task,
+    text: req.text,
+    profileId: req.profileId,
+    model: req.model,
+    x: req.x,
+    y: req.y,
     thinking: '',
     content: '',
     error: '',
@@ -35,13 +53,17 @@ function emptyPanel(task: TaskKind, text: string, profileId: string): PanelState
 }
 
 function selectedText(): string {
-  const value = window.getSelection()?.toString() ?? '';
-  return value.trim();
+  const selection = window.getSelection();
+  if (!selection || selection.isCollapsed) {
+    return '';
+  }
+  return selection.toString().trim();
 }
 
 function fromExtensionUi(ev: Event): boolean {
-  const path = ev.composedPath();
-  return path.some((node) => node instanceof Element && node.localName === 'huaci-transform');
+  return ev
+    .composedPath()
+    .some((node) => node instanceof Element && node.localName === 'huaci-transform');
 }
 
 export function ContentApp() {
@@ -77,7 +99,7 @@ export function ContentApp() {
   }, []);
 
   const startTask = useCallback(
-    (task: TaskKind, text: string, profileId: string) => {
+    (req: TaskRequest) => {
       const port = ensurePort();
       if (requestRef.current) {
         const abort: ClientMessage = { type: 'abort', requestId: requestRef.current };
@@ -85,46 +107,85 @@ export function ContentApp() {
       }
       const requestId = crypto.randomUUID();
       requestRef.current = requestId;
-      setPanel(emptyPanel(task, text, profileId));
+      setPanel(emptyPanel(req));
       setOpen(true);
-      const msg: ClientMessage = { type: 'start', requestId, task, text, profileId };
+      const msg: ClientMessage = {
+        type: 'start',
+        requestId,
+        task: req.task,
+        text: req.text,
+        profileId: req.profileId,
+        model: req.model,
+      };
       port.postMessage(msg);
     },
     [ensurePort],
   );
 
+  const dismiss = useCallback(() => {
+    setOpen(false);
+    setSel(null);
+  }, []);
+
   useEffect(() => {
+    let timer = 0;
+    const onMouseDown = (ev: MouseEvent) => {
+      if (!fromExtensionUi(ev)) {
+        dismiss();
+      }
+    };
+    // 单击处理时选区尚未塌陷，延后一拍再判定，避免工具条在点击空白处后重新定位
     const onMouseUp = (ev: MouseEvent) => {
       if (fromExtensionUi(ev)) {
         return;
       }
-      const text = selectedText();
-      if (!text) {
-        setSel(null);
-        return;
-      }
-      const point = layoutPoint(ev.clientX + 8, ev.clientY + 12, 160, 40);
-      setSel({ x: point.x, y: point.y, text });
+      const { clientX, clientY } = ev;
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        const text = selectedText();
+        if (!text) {
+          setSel(null);
+          return;
+        }
+        const point = layoutPoint(clientX + 8, clientY + 12, TOOLBAR_WIDTH, TOOLBAR_HEIGHT);
+        setSel({ x: point.x, y: point.y, text });
+      }, 0);
     };
+    const onKeyDown = (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape') {
+        dismiss();
+      }
+    };
+    document.addEventListener('mousedown', onMouseDown, true);
     document.addEventListener('mouseup', onMouseUp);
-    return () => document.removeEventListener('mouseup', onMouseUp);
-  }, []);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener('mousedown', onMouseDown, true);
+      document.removeEventListener('mouseup', onMouseUp);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [dismiss]);
 
-  const defaultId = settings?.defaultProfileId ?? '';
-
-  const onTranslate = () => {
-    if (!sel || !settings) return;
-    startTask('translate', sel.text, panel?.profileId || defaultId);
+  const run = (task: TaskKind) => {
+    if (!sel || !settings) {
+      return;
+    }
+    const profile =
+      settings.profiles.find((p) => p.id === settings.defaultProfileId) ?? settings.profiles[0];
+    if (!profile) {
+      return;
+    }
+    const pos = layoutPoint(sel.x, sel.y + 42, PANEL_WIDTH, PANEL_HEIGHT);
+    startTask({
+      task,
+      text: sel.text,
+      profileId: profile.id,
+      model: defaultModelFor(profile, task),
+      x: pos.x,
+      y: pos.y,
+    });
   };
-  const onExplain = () => {
-    if (!sel || !settings) return;
-    startTask('explain', sel.text, panel?.profileId || defaultId);
-  };
-
-  const panelPos = useMemo(() => {
-    const origin = sel ?? { x: 24, y: 24 };
-    return layoutPoint(origin.x, origin.y + 42, 420, 280);
-  }, [sel]);
 
   if (!settings) {
     return null;
@@ -137,20 +198,31 @@ export function ContentApp() {
         y={sel?.y ?? 0}
         visible={Boolean(sel)}
         active={open ? panel?.task : undefined}
-        onTranslate={onTranslate}
-        onExplain={onExplain}
+        onTranslate={() => run('translate')}
+        onExplain={() => run('explain')}
       />
       {panel && (
         <ResultPanel
-          x={panelPos.x}
-          y={panelPos.y}
           open={open}
           typewriter={settings.typewriterEnabled}
           profiles={settings.profiles}
           state={panel}
           onClose={() => setOpen(false)}
           onCopy={() => navigator.clipboard.writeText(panel.content)}
-          onSwitchProfile={(id) => startTask(panel.task, panel.text, id)}
+          onSwitchModel={(profileId, model) =>
+            startTask({
+              task: panel.task,
+              text: panel.text,
+              profileId,
+              model,
+              x: panel.x,
+              y: panel.y,
+            })
+          }
+          onOpenOptions={() => {
+            const msg: ClientMessage = { type: 'open-options' };
+            ensurePort().postMessage(msg);
+          }}
         />
       )}
     </div>
@@ -163,7 +235,7 @@ function applyEvent(prev: PanelState | null, event: ServerEvent): PanelState | n
   }
   switch (event.type) {
     case 'meta':
-      return { ...prev, meta: event, profileId: event.profileId };
+      return { ...prev, meta: event, profileId: event.profileId, model: event.model };
     case 'thinking':
       return { ...prev, thinking: prev.thinking + event.delta };
     case 'content':

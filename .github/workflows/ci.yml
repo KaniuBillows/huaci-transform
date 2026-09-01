@@ -18,3 +18,23 @@ jobs:
       - run: npm test
       - run: npm run compile
       - run: npm run build
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Install Chrome for Testing
+        id: chrome
+        run: |
+          OUT=$(npx --yes @puppeteer/browsers install chrome@stable)
+          echo "path=${OUT##* }" >> "$GITHUB_OUTPUT"
+      - run: xvfb-run --auto-servernum npm run e2e
+        env:
+          CHROME_PATH: ${{ steps.chrome.outputs.path }}

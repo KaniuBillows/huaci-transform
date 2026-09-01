@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { isSameLocalDay } from '../../lib/date';
 import { formatMoney } from '../../lib/number';
+import { openOptionsPage } from '../../lib/options-page';
 import { sumBy } from '../../lib/slices';
 import { loadSettings, loadUsage, saveSettings } from '../../lib/storage';
 import type { AppSettings, UsageRecord } from '../../lib/types';
@@ -44,7 +45,7 @@ export function PopupApp() {
           ))}
         </select>
       </div>
-      <button type="button" onClick={() => browser.runtime.openOptionsPage()}>
+      <button type="button" onClick={() => void openOptionsPage()}>
         打开设置
       </button>
     </div>
