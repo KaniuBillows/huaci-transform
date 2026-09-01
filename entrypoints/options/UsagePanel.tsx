@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { formatCostSummary } from '../../lib/billing';
 import { formatDateTime, isSameLocalDay } from '../../lib/date';
 import { formatMoney } from '../../lib/number';
 import { sumBy } from '../../lib/slices';
@@ -9,15 +10,17 @@ interface Props {
   onClear: () => void;
 }
 
+function usageCombinationName(record: UsageRecord): string {
+  const legacy = record as UsageRecord & { profileName?: string };
+  return record.combinationName || legacy.profileName || '旧版记录';
+}
+
 export function UsagePanel({ records, onClear }: Props) {
   const today = useMemo(
     () => records.filter((r) => isSameLocalDay(r.createdAt, Date.now())),
     [records],
   );
-  const todayCost = sumBy(today, (r) => r.cost);
-  const allCost = sumBy(records, (r) => r.cost);
   const tokens = sumBy(records, (r) => r.promptTokens + r.completionTokens);
-  const currency = records[0]?.currency ?? 'CNY';
 
   return (
     <>
@@ -26,11 +29,11 @@ export function UsagePanel({ records, onClear }: Props) {
       <div className="stat">
         <div>
           今日费用
-          <b>{formatMoney(todayCost, currency)}</b>
+          <b>{formatCostSummary(today)}</b>
         </div>
         <div>
           累计费用
-          <b>{formatMoney(allCost, currency)}</b>
+          <b>{formatCostSummary(records)}</b>
         </div>
         <div>
           累计 tokens
@@ -54,7 +57,7 @@ export function UsagePanel({ records, onClear }: Props) {
               <tr key={r.id}>
                 <td>{formatDateTime(r.createdAt)}</td>
                 <td>{r.task === 'explain' ? '解释' : '翻译'}</td>
-                <td>{r.profileName}</td>
+                <td>{usageCombinationName(r)}</td>
                 <td>{r.model}</td>
                 <td>
                   {r.promptTokens}+{r.completionTokens}

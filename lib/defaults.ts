@@ -1,28 +1,35 @@
 import { DEFAULT_EXPLAIN_PROMPT, DEFAULT_TRANSLATE_PROMPT } from './prompts';
-import type { ApiProfile, AppSettings } from './types';
+import { createPresetModels } from './providers';
+import type { AppSettings, ModelCombination } from './types';
 
-export function createEmptyProfile(): ApiProfile {
+/** 当前持久化设置版本。 */
+export const SETTINGS_VERSION = 4;
+
+/** 创建默认的翻译/解释组合。 */
+export function createEmptyCombination(
+  translateModelId = 'preset:openai:gpt-5.6-luna',
+  explainModelId = 'preset:anthropic:claude-sonnet-5',
+): ModelCombination {
   return {
     id: crypto.randomUUID(),
     name: '默认配置',
-    baseUrl: 'https://api.openai.com/v1',
-    apiKey: '',
-    translateModel: 'gpt-4o-mini',
-    explainModel: 'gpt-4o-mini',
-    models: ['gpt-4o-mini', 'gpt-4o'],
+    translateModelId,
+    explainModelId,
   };
 }
 
 export function createDefaultSettings(): AppSettings {
-  const profile = createEmptyProfile();
+  const combination = createEmptyCombination();
   return {
-    profiles: [profile],
-    defaultProfileId: profile.id,
+    settingsVersion: SETTINGS_VERSION,
+    models: createPresetModels(),
+    combinations: [combination],
+    defaultCombinationId: combination.id,
     streamEnabled: true,
     typewriterEnabled: true,
     thinkingEnabled: false,
+    thinkingExpandedByDefault: false,
     translatePrompt: DEFAULT_TRANSLATE_PROMPT,
     explainPrompt: DEFAULT_EXPLAIN_PROMPT,
-    prices: [],
   };
 }

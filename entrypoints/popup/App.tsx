@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react';
+import { formatCostSummary } from '../../lib/billing';
 import { isSameLocalDay } from '../../lib/date';
-import { formatMoney } from '../../lib/number';
 import { openOptionsPage } from '../../lib/options-page';
-import { sumBy } from '../../lib/slices';
 import { loadSettings, loadUsage, saveSettings } from '../../lib/storage';
 import type { AppSettings, UsageRecord } from '../../lib/types';
 
@@ -19,8 +18,6 @@ export function PopupApp() {
     return null;
   }
   const today = usage.filter((r) => isSameLocalDay(r.createdAt, Date.now()));
-  const cost = sumBy(today, (r) => r.cost);
-  const currency = today[0]?.currency ?? 'CNY';
 
   return (
     <div className="wrap">
@@ -28,19 +25,19 @@ export function PopupApp() {
       <p>划词后点「翻译」或「解释」</p>
       <div className="card">
         今日消耗
-        <b>{formatMoney(cost, currency)}</b>
+        <b>{formatCostSummary(today)}</b>
         <div className="muted">{today.length} 次调用</div>
         <select
-          value={settings.defaultProfileId}
+          value={settings.defaultCombinationId}
           onChange={async (e) => {
-            const next = { ...settings, defaultProfileId: e.target.value };
+            const next = { ...settings, defaultCombinationId: e.target.value };
             setSettings(next);
             await saveSettings(next);
           }}
         >
-          {settings.profiles.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
+          {settings.combinations.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.name}
             </option>
           ))}
         </select>

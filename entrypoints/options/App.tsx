@@ -2,24 +2,24 @@ import { useEffect, useState } from 'react';
 import { clearUsage, loadSettings, loadUsage, saveSettings } from '../../lib/storage';
 import type { AppSettings, UsageRecord } from '../../lib/types';
 import { BehaviorPanel } from './BehaviorPanel';
-import { PricingPanel } from './PricingPanel';
-import { ProfilesPanel } from './ProfilesPanel';
+import { CombinationsPanel } from './CombinationsPanel';
+import { ModelsPanel } from './ModelsPanel';
 import { PromptsPanel } from './PromptsPanel';
 import { UsagePanel } from './UsagePanel';
 import './style.css';
 
-type Tab = 'profiles' | 'behavior' | 'prompts' | 'pricing' | 'usage';
+type Tab = 'models' | 'combinations' | 'behavior' | 'prompts' | 'usage';
 
 const TABS: { id: Tab; label: string }[] = [
-  { id: 'profiles', label: 'API 配置' },
+  { id: 'models', label: '模型库' },
+  { id: 'combinations', label: '组合配置' },
   { id: 'behavior', label: '交互行为' },
   { id: 'prompts', label: '提示词' },
-  { id: 'pricing', label: '单价' },
   { id: 'usage', label: '用量' },
 ];
 
 export function OptionsApp() {
-  const [tab, setTab] = useState<Tab>('profiles');
+  const [tab, setTab] = useState<Tab>('models');
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [usage, setUsage] = useState<UsageRecord[]>([]);
   const [saved, setSaved] = useState(false);
@@ -64,10 +64,12 @@ export function OptionsApp() {
         </nav>
       </aside>
       <main className="main">
-        {tab === 'profiles' && <ProfilesPanel settings={settings} onChange={persist} />}
+        {tab === 'models' && <ModelsPanel settings={settings} onChange={persist} />}
+        {tab === 'combinations' && (
+          <CombinationsPanel settings={settings} onChange={persist} />
+        )}
         {tab === 'behavior' && <BehaviorPanel settings={settings} onChange={persist} />}
         {tab === 'prompts' && <PromptsPanel settings={settings} onChange={persist} />}
-        {tab === 'pricing' && <PricingPanel settings={settings} onChange={persist} />}
         {tab === 'usage' && (
           <UsagePanel
             records={usage}

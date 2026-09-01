@@ -1,14 +1,13 @@
 import { useEffect, useState } from 'react';
 import { formatMoney } from '../../lib/number';
-import { profileModels } from '../../lib/profile';
-import type { ApiProfile, ServerEvent, TaskKind } from '../../lib/types';
+import type { ModelConfig, ServerEvent, TaskKind } from '../../lib/types';
 import { useDisplayedText } from './use-displayed-text';
 
 interface PanelState {
   task: TaskKind;
   text: string;
-  profileId: string;
-  model: string;
+  combinationId: string;
+  modelId: string;
   x: number;
   y: number;
   thinking: string;
@@ -22,15 +21,14 @@ interface PanelState {
 interface Props {
   open: boolean;
   typewriter: boolean;
-  profiles: ApiProfile[];
+  thinkingExpandedByDefault: boolean;
+  models: ModelConfig[];
   state: PanelState;
   onClose: () => void;
   onCopy: () => void;
-  onSwitchModel: (profileId: string, model: string) => void;
+  onSwitchModel: (modelId: string) => void;
   onOpenOptions: () => void;
 }
-
-const SEP = '\u0000';
 
 function CopyIcon({ done }: { done: boolean }) {
   if (done) {
@@ -68,9 +66,39 @@ function useCopied(): [boolean, () => void] {
   return [copied, () => setCopied(true)];
 }
 
-function hasOption(profiles: ApiProfile[], profileId: string, model: string): boolean {
-  const profile = profiles.find((p) => p.id === profileId);
-  return Boolean(profile && profileModels(profile).includes(model));
+function ThinkingBlock({
+  text,
+  expandedByDefault,
+  requestKey,
+}: {
+  text: string;
+  expandedByDefault: boolean;
+  requestKey: string;
+}) {
+  const [open, setOpen] = useState(expandedByDefault);
+  useEffect(() => {
+    setOpen(expandedByDefault);
+  }, [requestKey, expandedByDefault]);
+  return (
+    <details
+      className="tf-think"
+      open={open}
+      onToggle={(event) => setOpen((event.currentTarget as HTMLDetailsElement).open)}
+    >
+      <summary>思考过程</summary>
+      {text}
+    </details>
+  );
+}
+
+function groupModels(models: ModelConfig[]): Map<string, ModelConfig[]> {
+  const groups = new Map<string, ModelConfig[]>();
+  for (const model of models.filter((item) => item.enabled)) {
+    const group = groups.get(model.providerName) ?? [];
+    group.push(model);
+    groups.set(model.providerName, group);
+  }
+  return groups;
 }
 
 export function ResultPanel(props: Props) {
@@ -80,27 +108,24 @@ export function ResultPanel(props: Props) {
   if (!props.open) {
     return null;
   }
-  const value = `${state.profileId}${SEP}${state.model}`;
-  const missing = state.model && !hasOption(props.profiles, state.profileId, state.model);
+  const groups = groupModels(props.models);
 
   return (
     <section className="tf-panel" style={{ left: state.x, top: state.y }}>
       <header className="tf-head">
         <select
           className="tf-select"
-          value={value}
+          value={state.modelId}
           title="切换模型"
-          onChange={(e) => {
-            const [profileId, model] = e.target.value.split(SEP);
-            props.onSwitchModel(profileId ?? '', model ?? '');
-          }}
+          disabled={groups.size === 0}
+          onChange={(e) => props.onSwitchModel(e.target.value)}
         >
-          {missing && <option value={value}>{state.model}</option>}
-          {props.profiles.map((p) => (
-            <optgroup key={p.id} label={p.name}>
-              {profileModels(p).map((m) => (
-                <option key={m} value={`${p.id}${SEP}${m}`}>
-                  {m}
+          {groups.size === 0 && <option value="">未配置模型</option>}
+          {[...groups.entries()].map(([providerName, models]) => (
+            <optgroup key={providerName} label={providerName}>
+              {models.map((model) => (
+                <option key={model.id} value={model.id}>
+                  {model.name}
                 </option>
               ))}
             </optgroup>
@@ -129,10 +154,11 @@ export function ResultPanel(props: Props) {
           </div>
         )}
         {state.thinking && (
-          <details className="tf-think" open>
-            <summary>思考过程</summary>
-            {state.thinking}
-          </details>
+          <ThinkingBlock
+            text={state.thinking}
+            expandedByDefault={props.thinkingExpandedByDefault}
+            requestKey={`${state.combinationId}:${state.modelId}:${state.task}`}
+          />
         )}
         {state.error && (
           <div className="tf-error">
@@ -153,7 +179,7 @@ export function ResultPanel(props: Props) {
               ? '生成中'
               : ''}
         </span>
-        <span>{state.meta?.profileName}</span>
+        <span>{state.meta?.combinationName}</span>
       </footer>
     </section>
   );

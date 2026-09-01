@@ -41,4 +41,17 @@ describe('calcTokenCost', () => {
   it('computes million-token price', () => {
     expect(calcTokenCost(1_000_000, 500_000, 2, 8)).toBe(6);
   });
+
+  it('uses cache price for cached prompt tokens', () => {
+    expect(calcTokenCost(1_000_000, 0, 2, 8, 250_000, 0.2)).toBe(1.55);
+  });
+});
+
+describe('parsePriceInput', () => {
+  it('accepts leading decimal values', async () => {
+    const { parsePriceInput } = await import('./number');
+    expect(parsePriceInput('0.15')).toBe(0.15);
+    expect(parsePriceInput('0.')).toBe(0);
+    expect(parsePriceInput('.5')).toBe(0.5);
+  });
 });

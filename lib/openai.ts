@@ -1,8 +1,7 @@
-import type { ApiProfile } from './types';
+import type { ModelConfig } from './types';
 
 export interface ChatParams {
-  profile: ApiProfile;
-  model: string;
+  model: ModelConfig;
   userPrompt: string;
   stream: boolean;
   thinking: boolean;
@@ -11,12 +10,14 @@ export interface ChatParams {
 export interface ChatHandlers {
   onThinking: (delta: string) => void;
   onContent: (delta: string) => void;
-  onUsage: (promptTokens: number, completionTokens: number) => void;
+  onUsage: (promptTokens: number, completionTokens: number, cachedTokens: number) => void;
 }
 
 interface UsageJson {
   prompt_tokens?: number;
   completion_tokens?: number;
+  prompt_tokens_details?: { cached_tokens?: number };
+  input_tokens_details?: { cached_tokens?: number };
 }
 
 interface DeltaJson {
@@ -38,18 +39,18 @@ function thinkingText(delta: DeltaJson): string {
   return delta.reasoning_content || delta.reasoning || delta.thinking || '';
 }
 
-function buildBody(params: ChatParams): Record<string, unknown> {
+/** 构造 Chat Completions 请求体。 */
+export function buildChatBody(params: ChatParams): Record<string, unknown> {
   const body: Record<string, unknown> = {
-    model: params.model,
+    model: params.model.model,
     messages: [{ role: 'user', content: params.userPrompt }],
     stream: params.stream,
   };
   if (params.stream) {
     body.stream_options = { include_usage: true };
   }
-  if (params.thinking) {
-    body.enable_thinking = true;
-  }
+  // 部分厂商未显式传参时会默认开启思考，必须始终携带布尔值
+  body.enable_thinking = params.thinking;
   return body;
 }
 
@@ -91,7 +92,11 @@ function emitUsage(usage: UsageJson | undefined, handlers: ChatHandlers): void {
   if (!usage) {
     return;
   }
-  handlers.onUsage(usage.prompt_tokens ?? 0, usage.completion_tokens ?? 0);
+  const cached =
+    usage.prompt_tokens_details?.cached_tokens ??
+    usage.input_tokens_details?.cached_tokens ??
+    0;
+  handlers.onUsage(usage.prompt_tokens ?? 0, usage.completion_tokens ?? 0, cached);
 }
 
 function applyChunk(raw: unknown, handlers: ChatHandlers): void {
@@ -140,13 +145,13 @@ export async function chatComplete(
   handlers: ChatHandlers,
   signal: AbortSignal,
 ): Promise<void> {
-  const response = await fetch(completionsUrl(params.profile.baseUrl), {
+  const response = await fetch(completionsUrl(params.model.baseUrl), {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${params.profile.apiKey}`,
+      Authorization: `Bearer ${params.model.apiKey}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify(buildBody(params)),
+    body: JSON.stringify(buildChatBody(params)),
     signal,
   });
   if (!response.ok) {

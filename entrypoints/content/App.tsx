@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { LLM_PORT } from '../../lib/port';
-import { defaultModelFor } from '../../lib/profile';
+import { defaultCombination, modelForTask } from '../../lib/model_config';
+import { CONTEXT_INVALIDATED_HINT, isExtensionAlive } from '../../lib/runtime';
 import { loadSettings, onSettingsChanged } from '../../lib/storage';
 import type { AppSettings, ClientMessage, ServerEvent, TaskKind } from '../../lib/types';
+import { layoutPanelNearToolbar } from '../../lib/layout';
 import { ResultPanel, type PanelState } from './ResultPanel';
 import { Toolbar } from './Toolbar';
 
@@ -15,8 +17,8 @@ interface SelectionBox {
 interface TaskRequest {
   task: TaskKind;
   text: string;
-  profileId: string;
-  model: string;
+  combinationId: string;
+  modelId: string;
   x: number;
   y: number;
 }
@@ -41,8 +43,8 @@ function emptyPanel(req: TaskRequest): PanelState {
   return {
     task: req.task,
     text: req.text,
-    profileId: req.profileId,
-    model: req.model,
+    combinationId: req.combinationId,
+    modelId: req.modelId,
     x: req.x,
     y: req.y,
     thinking: '',
@@ -75,51 +77,89 @@ export function ContentApp() {
   const requestRef = useRef('');
 
   useEffect(() => {
-    loadSettings().then(setSettings);
-    return onSettingsChanged(setSettings);
+    if (!isExtensionAlive()) {
+      return;
+    }
+    loadSettings()
+      .then(setSettings)
+      .catch(() => {
+        /* 扩展上下文失效时忽略 */
+      });
+    try {
+      return onSettingsChanged(setSettings);
+    } catch {
+      return undefined;
+    }
   }, []);
 
-  const ensurePort = useCallback(() => {
+  const ensurePort = useCallback((): Browser.runtime.Port | null => {
+    if (!isExtensionAlive()) {
+      portRef.current = null;
+      return null;
+    }
     if (portRef.current) {
       return portRef.current;
     }
-    const port = browser.runtime.connect({ name: LLM_PORT });
-    port.onMessage.addListener((raw) => {
-      const event = raw as ServerEvent;
-      if (event.requestId !== requestRef.current) {
-        return;
-      }
-      setPanel((prev) => applyEvent(prev, event));
-    });
-    port.onDisconnect.addListener(() => {
+    try {
+      const port = browser.runtime.connect({ name: LLM_PORT });
+      port.onMessage.addListener((raw) => {
+        const event = raw as ServerEvent;
+        if (event.requestId !== requestRef.current) {
+          return;
+        }
+        setPanel((prev) => applyEvent(prev, event));
+      });
+      port.onDisconnect.addListener(() => {
+        portRef.current = null;
+      });
+      portRef.current = port;
+      return port;
+    } catch {
       portRef.current = null;
+      return null;
+    }
+  }, []);
+
+  const showLocalError = useCallback((req: TaskRequest, message: string) => {
+    setPanel({
+      ...emptyPanel(req),
+      loading: false,
+      error: message,
     });
-    portRef.current = port;
-    return port;
+    setOpen(true);
   }, []);
 
   const startTask = useCallback(
     (req: TaskRequest) => {
       const port = ensurePort();
-      if (requestRef.current) {
-        const abort: ClientMessage = { type: 'abort', requestId: requestRef.current };
-        port.postMessage(abort);
+      if (!port) {
+        showLocalError(req, CONTEXT_INVALIDATED_HINT);
+        return;
       }
-      const requestId = crypto.randomUUID();
-      requestRef.current = requestId;
-      setPanel(emptyPanel(req));
-      setOpen(true);
-      const msg: ClientMessage = {
-        type: 'start',
-        requestId,
-        task: req.task,
-        text: req.text,
-        profileId: req.profileId,
-        model: req.model,
-      };
-      port.postMessage(msg);
+      try {
+        if (requestRef.current) {
+          const abort: ClientMessage = { type: 'abort', requestId: requestRef.current };
+          port.postMessage(abort);
+        }
+        const requestId = crypto.randomUUID();
+        requestRef.current = requestId;
+        setPanel(emptyPanel(req));
+        setOpen(true);
+        const msg: ClientMessage = {
+          type: 'start',
+          requestId,
+          task: req.task,
+          text: req.text,
+          combinationId: req.combinationId,
+          modelId: req.modelId,
+        };
+        port.postMessage(msg);
+      } catch {
+        portRef.current = null;
+        showLocalError(req, CONTEXT_INVALIDATED_HINT);
+      }
     },
-    [ensurePort],
+    [ensurePort, showLocalError],
   );
 
   const dismiss = useCallback(() => {
@@ -171,17 +211,46 @@ export function ContentApp() {
     if (!sel || !settings) {
       return;
     }
-    const profile =
-      settings.profiles.find((p) => p.id === settings.defaultProfileId) ?? settings.profiles[0];
-    if (!profile) {
+    const combination = defaultCombination(settings);
+    const pos = layoutPanelNearToolbar(sel.x, sel.y, window.innerWidth, window.innerHeight);
+    if (!combination) {
+      setPanel({
+        ...emptyPanel({
+          task,
+          text: sel.text,
+          combinationId: '',
+          modelId: '',
+          x: pos.x,
+          y: pos.y,
+        }),
+        loading: false,
+        error: '请先在设置页创建组合配置',
+      });
+      setOpen(true);
       return;
     }
-    const pos = layoutPoint(sel.x, sel.y + 42, PANEL_WIDTH, PANEL_HEIGHT);
+    const model = modelForTask(settings, combination, task);
+    if (!model) {
+      setPanel({
+        ...emptyPanel({
+          task,
+          text: sel.text,
+          combinationId: combination.id,
+          modelId: '',
+          x: pos.x,
+          y: pos.y,
+        }),
+        loading: false,
+        error: `当前组合没有已启用的${task === 'translate' ? '翻译' : '解释'}模型`,
+      });
+      setOpen(true);
+      return;
+    }
     startTask({
       task,
       text: sel.text,
-      profileId: profile.id,
-      model: defaultModelFor(profile, task),
+      combinationId: combination.id,
+      modelId: model.id,
       x: pos.x,
       y: pos.y,
     });
@@ -204,24 +273,56 @@ export function ContentApp() {
       {panel && (
         <ResultPanel
           open={open}
-          typewriter={settings.typewriterEnabled}
-          profiles={settings.profiles}
+          typewriter={settings.streamEnabled && settings.typewriterEnabled}
+          thinkingExpandedByDefault={
+            settings.thinkingEnabled && settings.thinkingExpandedByDefault
+          }
+          models={settings.models}
           state={panel}
           onClose={() => setOpen(false)}
           onCopy={() => navigator.clipboard.writeText(panel.content)}
-          onSwitchModel={(profileId, model) =>
+          onSwitchModel={(modelId) =>
             startTask({
               task: panel.task,
               text: panel.text,
-              profileId,
-              model,
+              combinationId: panel.combinationId,
+              modelId,
               x: panel.x,
               y: panel.y,
             })
           }
           onOpenOptions={() => {
-            const msg: ClientMessage = { type: 'open-options' };
-            ensurePort().postMessage(msg);
+            const port = ensurePort();
+            if (!port) {
+              showLocalError(
+                {
+                  task: panel.task,
+                  text: panel.text,
+                  combinationId: panel.combinationId,
+                  modelId: panel.modelId,
+                  x: panel.x,
+                  y: panel.y,
+                },
+                CONTEXT_INVALIDATED_HINT,
+              );
+              return;
+            }
+            try {
+              const msg: ClientMessage = { type: 'open-options' };
+              port.postMessage(msg);
+            } catch {
+              showLocalError(
+                {
+                  task: panel.task,
+                  text: panel.text,
+                  combinationId: panel.combinationId,
+                  modelId: panel.modelId,
+                  x: panel.x,
+                  y: panel.y,
+                },
+                CONTEXT_INVALIDATED_HINT,
+              );
+            }
           }}
         />
       )}
@@ -235,7 +336,12 @@ function applyEvent(prev: PanelState | null, event: ServerEvent): PanelState | n
   }
   switch (event.type) {
     case 'meta':
-      return { ...prev, meta: event, profileId: event.profileId, model: event.model };
+      return {
+        ...prev,
+        meta: event,
+        combinationId: event.combinationId,
+        modelId: event.modelId,
+      };
     case 'thinking':
       return { ...prev, thinking: prev.thinking + event.delta };
     case 'content':

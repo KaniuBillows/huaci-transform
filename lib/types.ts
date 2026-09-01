@@ -4,33 +4,43 @@ export type TaskKind = 'translate' | 'explain';
 /** 货币单位。 */
 export type Currency = 'CNY' | 'USD';
 
-/** 一套第三方 OpenAI 兼容 API 配置。 */
-export interface ApiProfile {
+/** 单个可独立调用和计费的模型配置。 */
+export interface ModelConfig {
   id: string;
+  providerId: string;
+  providerName: string;
+  /** 厂商图标键；未知厂商使用 custom */
+  icon: string;
+  /** 是否来自内置模版 */
+  preset: boolean;
   name: string;
+  model: string;
   baseUrl: string;
   apiKey: string;
-  translateModel: string;
-  explainModel: string;
-  /** 该配置下可在悬浮窗直接切换的模型 */
-  models: string[];
-}
-
-/** 单个模型的百万 token 单价。 */
-export interface ModelPrice {
-  id: string;
-  model: string;
+  enabled: boolean;
   inputPerMillion: number;
   outputPerMillion: number;
+  /** 缓存命中输入单价（每百万 tokens） */
+  cacheInputPerMillion: number;
   currency: Currency;
+}
+
+/** 翻译与解释模型的组合配置。 */
+export interface ModelCombination {
+  id: string;
+  name: string;
+  translateModelId: string;
+  explainModelId: string;
 }
 
 /** 一次调用的本地计费记录。 */
 export interface UsageRecord {
   id: string;
   createdAt: number;
-  profileId: string;
-  profileName: string;
+  combinationId: string;
+  combinationName: string;
+  modelId: string;
+  providerName: string;
   task: TaskKind;
   model: string;
   promptTokens: number;
@@ -41,14 +51,17 @@ export interface UsageRecord {
 
 /** 插件全局设置。 */
 export interface AppSettings {
-  profiles: ApiProfile[];
-  defaultProfileId: string;
+  settingsVersion: number;
+  models: ModelConfig[];
+  combinations: ModelCombination[];
+  defaultCombinationId: string;
   streamEnabled: boolean;
   typewriterEnabled: boolean;
   thinkingEnabled: boolean;
+  /** 收到思考内容时是否默认展开 */
+  thinkingExpandedByDefault: boolean;
   translatePrompt: string;
   explainPrompt: string;
-  prices: ModelPrice[];
 }
 
 /** 发给后台的任务启动消息。 */
@@ -57,9 +70,9 @@ export interface StartTaskMessage {
   requestId: string;
   task: TaskKind;
   text: string;
-  profileId?: string;
-  /** 覆盖该配置的默认模型 */
-  model?: string;
+  combinationId?: string;
+  /** 覆盖组合里当前任务的模型 */
+  modelId?: string;
 }
 
 /** 发给后台的中止消息。 */
@@ -83,9 +96,11 @@ export type ServerEvent =
       requestId: string;
       sourceLanguage: string;
       targetLanguage: string;
+      modelId: string;
       model: string;
-      profileId: string;
-      profileName: string;
+      providerName: string;
+      combinationId: string;
+      combinationName: string;
     }
   | { type: 'thinking'; requestId: string; delta: string }
   | { type: 'content'; requestId: string; delta: string }
