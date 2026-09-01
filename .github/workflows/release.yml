@@ -1,0 +1,35 @@
+name: Release Chrome extension
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run compile
+      - run: npm run zip
+      - name: Locate zip
+        id: artifact
+        run: |
+          FILE=$(find .output -name '*chrome*.zip' | head -n 1)
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
+          echo "name=$(basename "$FILE")" >> "$GITHUB_OUTPUT"
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.artifact.outputs.file }}
+          generate_release_notes: true
+          body: |
+            Chrome 插件安装包：下载 `${{ steps.artifact.outputs.name }}` 后，在 `chrome://extensions` 打开开发者模式，选择「加载已解压的扩展程序」，或将 zip 解压后加载。

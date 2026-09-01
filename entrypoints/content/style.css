@@ -1,0 +1,140 @@
+:host {
+  all: initial;
+}
+
+.tf-root {
+  font-family: "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", system-ui, sans-serif;
+  font-size: 13px;
+  color: #1c1917;
+  line-height: 1.5;
+}
+
+.tf-toolbar,
+.tf-panel {
+  position: fixed;
+  z-index: 2147483646;
+  background: #fff;
+  border: 1px solid rgba(28, 25, 23, 0.08);
+  box-shadow: 0 10px 30px rgba(28, 25, 23, 0.12), 0 1px 2px rgba(28, 25, 23, 0.06);
+}
+
+.tf-toolbar {
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  border-radius: 999px;
+}
+
+.tf-toolbar button,
+.tf-icon,
+.tf-ghost {
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.tf-toolbar button {
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.tf-toolbar button:hover,
+.tf-ghost:hover,
+.tf-icon:hover {
+  background: #f5f5f4;
+}
+
+.tf-toolbar button.active {
+  background: #0f766e;
+  color: #fff;
+}
+
+.tf-panel {
+  width: min(420px, calc(100vw - 24px));
+  border-radius: 16px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: min(480px, calc(100vh - 24px));
+}
+
+.tf-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #f5f5f4;
+  background: #fafaf9;
+}
+
+.tf-title {
+  font-weight: 650;
+  font-size: 13px;
+  margin: 0;
+  flex: 1;
+}
+
+.tf-meta {
+  color: #78716c;
+  font-size: 11px;
+}
+
+.tf-select {
+  border: 1px solid #e7e5e4;
+  background: #fff;
+  border-radius: 8px;
+  padding: 4px 8px;
+  font: inherit;
+  max-width: 140px;
+}
+
+.tf-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+}
+
+.tf-body {
+  padding: 14px 16px 8px;
+  overflow: auto;
+  min-height: 80px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.tf-think {
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #f5f5f4;
+  color: #57534e;
+  font-size: 12px;
+}
+
+.tf-think summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.tf-error {
+  color: #b91c1c;
+}
+
+.tf-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 14px 12px;
+  color: #a8a29e;
+  font-size: 11px;
+}
+
+.tf-empty {
+  color: #a8a29e;
+}

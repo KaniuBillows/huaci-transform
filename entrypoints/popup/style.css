@@ -1,0 +1,38 @@
+body {
+  margin: 0;
+  width: 280px;
+  font-family: "Segoe UI", "PingFang SC", system-ui, sans-serif;
+  background: #f7f5f2;
+  color: #1c1917;
+}
+
+.wrap { padding: 16px; }
+h1 { font-size: 16px; margin: 0 0 4px; }
+p { margin: 0 0 12px; color: #78716c; font-size: 12px; }
+.card {
+  background: #fff;
+  border: 1px solid #e7e5e4;
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 10px;
+}
+b { font-size: 18px; display: block; margin-top: 4px; }
+button {
+  width: 100%;
+  border: 0;
+  background: #0f766e;
+  color: #fff;
+  border-radius: 10px;
+  padding: 9px;
+  font: inherit;
+  cursor: pointer;
+}
+select {
+  width: 100%;
+  margin-top: 8px;
+  border: 1px solid #e7e5e4;
+  border-radius: 8px;
+  padding: 6px;
+  font: inherit;
+}
+.muted { color: #a8a29e; font-size: 12px; }
