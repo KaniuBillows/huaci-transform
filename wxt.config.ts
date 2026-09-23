@@ -5,7 +5,7 @@ export default defineConfig({
   manifest: {
     name: '划词译',
     description: '划词翻译与解释，兼容 OpenAI 接口，支持多配置与本地计费。',
-    permissions: ['storage'],
+    permissions: ['storage', 'clipboardWrite'],
     host_permissions: ['<all_urls>'],
     icons: {
       16: 'icon/16.png',

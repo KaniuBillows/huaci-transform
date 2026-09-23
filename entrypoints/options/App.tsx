@@ -5,16 +5,18 @@ import { BehaviorPanel } from './BehaviorPanel';
 import { CombinationsPanel } from './CombinationsPanel';
 import { ModelsPanel } from './ModelsPanel';
 import { PromptsPanel } from './PromptsPanel';
+import { SyncPanel } from './SyncPanel';
 import { UsagePanel } from './UsagePanel';
 import './style.css';
 
-type Tab = 'models' | 'combinations' | 'behavior' | 'prompts' | 'usage';
+type Tab = 'models' | 'combinations' | 'behavior' | 'prompts' | 'sync' | 'usage';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'models', label: '模型库' },
   { id: 'combinations', label: '组合配置' },
   { id: 'behavior', label: '交互行为' },
   { id: 'prompts', label: '提示词' },
+  { id: 'sync', label: '配置同步' },
   { id: 'usage', label: '用量' },
 ];
 
@@ -70,6 +72,7 @@ export function OptionsApp() {
         )}
         {tab === 'behavior' && <BehaviorPanel settings={settings} onChange={persist} />}
         {tab === 'prompts' && <PromptsPanel settings={settings} onChange={persist} />}
+        {tab === 'sync' && <SyncPanel settings={settings} onChange={persist} />}
         {tab === 'usage' && (
           <UsagePanel
             records={usage}
