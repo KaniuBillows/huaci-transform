@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import {
   exportConfigString,
+  isSameConfigText,
   parseConfigString,
   summarizeSettings,
 } from '../../lib/config-exchange';
@@ -26,12 +27,18 @@ function copyText(text: string): Promise<void> {
   return ok ? Promise.resolve() : Promise.reject(new Error('copy failed'));
 }
 
+/** 已解析但尚未确认的配置包；`text` 记录解析时的输入原文。 */
+interface PendingImport {
+  settings: AppSettings;
+  text: string;
+}
+
 export function SyncPanel({ settings, onChange }: Props) {
   const [exported, setExported] = useState('');
   const [copied, setCopied] = useState(false);
   const [importText, setImportText] = useState('');
   const [error, setError] = useState('');
-  const [pending, setPending] = useState<AppSettings | null>(null);
+  const [pending, setPending] = useState<PendingImport | null>(null);
   const [done, setDone] = useState(false);
 
   const handleExport = () => {
@@ -50,6 +57,14 @@ export function SyncPanel({ settings, onChange }: Props) {
     }
   };
 
+  const handleImportTextChange = (value: string) => {
+    setImportText(value);
+    // 输入一旦变化，之前的预览就与当前内容不一致，必须撤销以免误导入
+    setPending(null);
+    setError('');
+    setDone(false);
+  };
+
   const handleParse = () => {
     setError('');
     setDone(false);
@@ -59,21 +74,27 @@ export function SyncPanel({ settings, onChange }: Props) {
       setPending(null);
       return;
     }
-    setPending(result.settings);
+    setPending({ settings: result.settings, text: importText });
   };
 
   const handleApply = () => {
     if (!pending) {
       return;
     }
-    onChange(pending);
+    // 双保险：即使输入框改回了相同内容，也用解析时的原文与当前内容核对
+    if (!isSameConfigText(pending.text, importText)) {
+      setPending(null);
+      setError('输入内容已变化，请重新解析并预览后再确认导入。');
+      return;
+    }
+    onChange(pending.settings);
     setPending(null);
     setImportText('');
     setDone(true);
     window.setTimeout(() => setDone(false), 3000);
   };
 
-  const summary = pending ? summarizeSettings(pending) : null;
+  const summary = pending ? summarizeSettings(pending.settings) : null;
 
   return (
     <>
@@ -113,7 +134,7 @@ export function SyncPanel({ settings, onChange }: Props) {
           style={{ marginTop: 12 }}
           placeholder="粘贴导出的配置字符串…"
           value={importText}
-          onChange={(e) => setImportText(e.target.value)}
+          onChange={(e) => handleImportTextChange(e.target.value)}
         />
         <div className="actions" style={{ marginTop: 12 }}>
           <button
@@ -130,10 +151,13 @@ export function SyncPanel({ settings, onChange }: Props) {
           <div className="import-preview">
             <p>解析成功，导入后将覆盖当前配置：</p>
             <ul>
-              <li>模型：{summary.models} 个（已启用 {summary.enabledModels} 个）</li>
+              <li>模型：{summary.models} 个（其中 {summary.enabledModels} 个已启用）</li>
               <li>组合配置：{summary.combinations} 个</li>
               <li>{summary.hasApiKeys ? '包含 API Key' : '不包含 API Key'}</li>
             </ul>
+            <div className="hint">
+              模型数为导入后的模型库总量：配置包内的模型会与插件内置模版模型合并。
+            </div>
             <div className="actions">
               <button type="button" className="primary" onClick={handleApply}>
                 确认导入

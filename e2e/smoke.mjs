@@ -187,6 +187,133 @@ try {
   const errText = await options.$eval('.sync-import .error', (el) => el.textContent);
   check('非法字符串有明确错误提示', errText.includes('JSON'), errText);
 
+  // 结构损坏的配置包必须报错，而不是被静默替换成默认设置后覆盖现有配置
+  const badPackages = [
+    { label: '缺 settings 内容', expect: 'models', pkg: { app: 'huaci-transform', kind: 'config', version: 1, settingsVersion: 4, settings: {} } },
+    { label: '模型项为 null', expect: '格式错误', pkg: { app: 'huaci-transform', kind: 'config', version: 1, settingsVersion: 4, settings: { models: [null], combinations: [{}] } } },
+  ];
+  for (const item of badPackages) {
+    const packageText = JSON.stringify(item.pkg);
+    await options.evaluate((value) => {
+      const input = document.querySelector('.sync-import textarea');
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+      setter.call(input, value);
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    }, packageText);
+    // 输入变化后预览必须立即撤销，不能被旧预览误导去点“确认导入”
+    const stalePreview = await options.$('.sync-import .import-preview');
+    check(`改动输入后撤销旧预览（${item.label}）`, stalePreview === null);
+    await options.click('.sync-import button.primary');
+    const badError = await options.$eval('.sync-import .error', (el) => el.textContent).catch(() => '');
+    const noPreview = await options.$('.sync-import .import-preview');
+    check(
+      `损坏配置包被拒绝并给出错误（${item.label}）`,
+      badError.includes(item.expect) && noPreview === null,
+      badError,
+    );
+  }
+  const storedAfterBad = await options.evaluate(async () => {
+    const data = await chrome.storage.local.get('transform.settings');
+    return data['transform.settings'];
+  });
+  check(
+    '损坏配置包未覆盖现有配置',
+    Array.isArray(storedAfterBad?.combinations) && storedAfterBad.combinations.length > 0,
+  );
+
+  // 内嵌设置版本高于当前插件时必须拒绝，避免归一化丢弃新字段后无法还原
+  await options.evaluate(() => {
+    const input = document.querySelector('.sync-import textarea');
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+    setter.call(
+      input,
+      JSON.stringify({
+        app: 'huaci-transform',
+        kind: 'config',
+        version: 1,
+        settingsVersion: 99,
+        settings: { models: [], combinations: [] },
+      }),
+    );
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await options.click('.sync-import button.primary');
+  const versionError = await options.$eval('.sync-import .error', (el) => el.textContent).catch(() => '');
+  check('设置 schema 版本过新被拒绝', versionError.includes('升级插件'), versionError);
+
+  // 纯空输入仍保持原有的“解析按钮禁用”行为
+  await options.evaluate(() => {
+    const input = document.querySelector('.sync-import textarea');
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+    setter.call(input, '');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  const parseDisabled = await options.$eval('.sync-import button.primary', (el) => el.disabled);
+  check('空输入时解析按钮禁用', parseDisabled === true);
+
+  // 先解析可用的包 B 并留下预览，再把输入改成另一个包 A：确认导入不得写入 B
+  const bundleB = JSON.stringify({
+    app: 'huaci-transform',
+    kind: 'config',
+    version: 1,
+    settingsVersion: 4,
+    settings: {
+      models: [
+        {
+          id: 'mock-explain',
+          providerId: 'anthropic',
+          providerName: 'Anthropic',
+          icon: 'anthropic',
+          preset: false,
+          name: 'Mock Claude',
+          model: 'mock-claude',
+          baseUrl: api.baseUrl,
+          apiKey: 'b-key',
+          enabled: true,
+          inputPerMillion: 3,
+          outputPerMillion: 15,
+          cacheInputPerMillion: 0.3,
+          currency: 'USD',
+        },
+      ],
+      combinations: [
+        {
+          id: 'combo-from-b',
+          name: 'B 组合',
+          translateModelId: 'mock-explain',
+          explainModelId: 'mock-explain',
+        },
+      ],
+      defaultCombinationId: 'combo-from-b',
+      translatePrompt: 'B 提示词：{{输入内容}}',
+    },
+  });
+  await options.evaluate((value) => {
+    const input = document.querySelector('.sync-import textarea');
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+    setter.call(input, value);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  }, bundleB);
+  await options.click('.sync-import button.primary');
+  await options.waitForSelector('.sync-import .import-preview', { timeout: 5000 });
+  // 在预览仍显示时改成结构合法的空组合包：若确认导入沿用了旧 pending 就会写入 B
+  await options.evaluate(() => {
+    const input = document.querySelector('.sync-import textarea');
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+    setter.call(input, '{"app":"other"}');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  const previewAfterEdit = await options.$('.sync-import .import-preview');
+  check('改动输入后不保留旧预览', previewAfterEdit === null);
+  const storedAfterEdit = await options.evaluate(async () => {
+    const data = await chrome.storage.local.get('transform.settings');
+    return data['transform.settings'];
+  });
+  check(
+    '改动输入后不会写入已解析的旧配置',
+    !(storedAfterEdit?.combinations ?? []).some((item) => item.id === 'combo-from-b'),
+  );
+
   // 种一条用量记录，验证导入不会覆盖它
   await options.evaluate(() =>
     chrome.storage.local.set({
@@ -277,7 +404,14 @@ try {
   await options.click('.sync-import button.primary');
   await options.waitForSelector('.sync-import .import-preview', { timeout: 5000 });
   const preview = await options.$eval('.sync-import .import-preview', (el) => el.textContent);
-  check('导入前预览模型与组合概要', preview.includes('模型：2 个'), preview);
+  // 预览展示的是导入后的模型库总量（配置包模型 + 内置模版模型），
+  // 所以只校验格式，随后用真实写入结果核对这个数字是否准确
+  const previewCounts = preview.match(/模型：(\d+) 个（其中 (\d+) 个已启用）/);
+  check(
+    '导入前预览模型与组合概要',
+    Boolean(previewCounts) && preview.includes('组合配置：1 个'),
+    preview,
+  );
   await options.click('.sync-import .import-preview button.primary');
   await options.waitForFunction(
     () => document.querySelector('.sync-import .ok')?.textContent?.includes('已导入'),
@@ -287,6 +421,13 @@ try {
     const data = await chrome.storage.local.get('transform.settings');
     return data['transform.settings'];
   });
+  check(
+    '预览的模型数量与导入结果一致',
+    previewCounts !== null &&
+      Number(previewCounts[1]) === stored.models?.length &&
+      Number(previewCounts[2]) === stored.models?.filter((m) => m.enabled).length,
+    `预览=${previewCounts?.[1]}/${previewCounts?.[2]} 实际=${stored.models?.length}/${stored.models?.filter((m) => m.enabled).length}`,
+  );
   check(
     '导入覆盖配置且保留 API Key',
     stored.combinations?.[0]?.id === 'combo-imported' &&
