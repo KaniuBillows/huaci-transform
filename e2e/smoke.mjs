@@ -462,6 +462,34 @@ try {
   const labels = await web.$$eval('>>> .tf-toolbar button', (els) => els.map((e) => e.textContent));
   check('划词后出现翻译与解释按钮', labels.join(',') === '翻译,解释', labels.join(','));
 
+  // 有些站点（Next.js/Turbo/Astro 等）客户端路由时会整体替换 <body>，挂在 body 上的
+  // 宿主元素会被一并移除：界面必须自动挂回，否则用户要刷新页面才能再划词。
+  // 注意复制 innerHTML 会把插件宿主也克隆进新 body（克隆体没有 shadow root），
+  // 真实站点替换 body 时不会带上它，这里显式去掉，避免断言读到那个空壳
+  await web.keyboard.press('Escape');
+  await web.evaluate(() => {
+    const next = document.createElement('body');
+    next.innerHTML = document.body.innerHTML;
+    next.querySelectorAll('huaci-transform').forEach((el) => el.remove());
+    document.body.replaceWith(next);
+  });
+  await new Promise((r) => setTimeout(r, 300));
+  const hostBack = await web.evaluate(() => {
+    const host = document.querySelector('huaci-transform');
+    return Boolean(host?.isConnected && host.shadowRoot);
+  });
+  check('站点替换 <body> 后宿主元素自动挂回', hostBack);
+
+  await web.mouse.move(box.x + 2, box.y + box.h / 2);
+  await web.mouse.down();
+  await web.mouse.move(box.x + box.w, box.y + box.h / 2, { steps: 8 });
+  await web.mouse.up();
+  const toolbarBack = await web
+    .waitForSelector('>>> .tf-toolbar', { timeout: 8000 })
+    .then(() => true)
+    .catch(() => false);
+  check('替换 <body> 后划词仍出现按钮', toolbarBack);
+
   const [translateBtn] = await web.$$('>>> .tf-toolbar button');
   await translateBtn.click();
 
