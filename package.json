@@ -2,7 +2,7 @@
   "name": "huaci-transform",
   "description": "划词翻译与解释，兼容 OpenAI 接口",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
     "dev": "wxt",
