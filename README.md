@@ -62,6 +62,10 @@ git tag v0.2.0
 git push origin v0.2.0
 ```
 
+PR 合并进 `main` 后也会自动发版：`auto-tag.yml` 在合并提交上打一个补丁 tag（`vX.Y.Z` → `vX.Y.(Z+1)`），并直接复用 `release.yml` 构建 zip、创建 Release，构建产物里的版本号会跟随 tag。想跳过发版，给 PR 加 `skip-release` 标签即可。
+
+> 用仓库自带的 `GITHUB_TOKEN` 推 tag 不会触发 `push` 事件（GitHub 的既定行为），所以自动发版是**直接调用** `release.yml`，而不是靠 tag 触发。若哪次只打上了 tag 却没出 Release，删掉远端 tag 再用自己的凭据重推一次即可补发。
+
 ## 技术栈
 
 [WXT](https://wxt.dev) + React + TypeScript，Manifest V3。
