@@ -1,9 +1,21 @@
 name: Release Chrome extension
 
+# 两种触发方式：
+#   1) 人工推送 v* tag（push 事件）
+#   2) 被 auto-tag.yml 以 workflow_call 复用
+# 为什么需要第 2 种：用仓库自带的 GITHUB_TOKEN 推 tag 不会触发 push 事件
+# （GitHub 规定：GITHUB_TOKEN 造成的事件不会再创建新的 workflow run），
+# 所以「合并后自动发版」必须直接调用本流程，而不是指望 tag 去触发它。
 on:
   push:
     tags:
       - 'v*'
+  workflow_call:
+    inputs:
+      tag:
+        description: 要构建并发布的 tag
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -13,6 +25,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -23,7 +37,7 @@ jobs:
       - name: Align build version with tag
         # 自动打的 tag 不会改仓库里的 package.json，这里让构建产物的版本号跟随 tag
         env:
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           export VERSION="${TAG#v}"
           node -e "
@@ -47,6 +61,7 @@ jobs:
           echo "name=$(basename "$FILE")" >> "$GITHUB_OUTPUT"
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.tag || github.ref_name }}
           files: ${{ steps.artifact.outputs.file }}
           generate_release_notes: true
           body: |
