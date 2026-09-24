@@ -1,0 +1,63 @@
+name: Auto patch tag on merge
+
+# PR 合并进 main 后，自动在合并提交上打一个补丁版本 tag（vX.Y.Z → vX.Y.(Z+1)），
+# tag 会触发 release.yml，构建 zip 并创建 Release。
+#
+# 说明：
+# - 跳过发版：给 PR 加 `skip-release` 标签，或自己手动把 tag 打上（HEAD 已有 tag 就跳过）。
+# - 需要仓库 Settings → Actions → Workflow permissions 允许读写（本文件已声明 contents: write）。
+# - 来自 fork 的 PR 合并时 GITHUB_TOKEN 只读，推 tag 会失败；仓库内分支不受影响。
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: auto-tag-main
+  cancel-in-progress: false
+
+jobs:
+  tag:
+    if: >-
+      github.event.pull_request.merged == true &&
+      !contains(github.event.pull_request.labels.*.name, 'skip-release')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Push next patch tag
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          existing=$(git tag --points-at HEAD)
+          if [ -n "$existing" ]; then
+            echo "合并提交上已有 tag（$existing），跳过"
+            exit 0
+          fi
+
+          latest=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n 1)
+          if [ -z "$latest" ]; then
+            echo "仓库里还没有 vX.Y.Z 形式的 tag，首次发版请手动打 tag"
+            exit 0
+          fi
+
+          IFS=. read -r major minor patch <<< "${latest#v}"
+          for part in "$major" "$minor" "$patch"; do
+            if ! [[ "$part" =~ ^[0-9]+$ ]]; then
+              echo "最新 tag $latest 不是三段纯数字版本，无法自动 +1，请手动打 tag" >&2
+              exit 1
+            fi
+          done
+
+          next="v${major}.${minor}.$((patch + 1))"
+          echo "最新 tag：$latest → 新 tag：$next"
+          git tag -a "$next" -m "Release $next"
+          git push origin "$next"
