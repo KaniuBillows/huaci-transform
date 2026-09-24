@@ -1,33 +1,48 @@
 const PANEL_WIDTH = 420;
-const PANEL_HEIGHT = 280;
+const PANEL_MAX_HEIGHT = 480;
 const TOOLBAR_HEIGHT = 40;
 const PANEL_GAP = 8;
+const EDGE_GAP = 12;
+const BOTTOM_GAP = 100;
+
+export interface PanelPosition {
+  x: number;
+  /** 下方布局时是上边缘，上方布局时是下边缘。 */
+  y: number;
+  placement: 'above' | 'below';
+  maxHeight: number;
+}
 
 function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
 }
 
-/**
- * 相对工具条放置悬浮窗：优先下方；下方空间不足时改到上方，避免挡住按钮。
- */
+/** 在工具条附近选择可用空间，并为流式增长的内容预留滚动高度。 */
 export function layoutPanelNearToolbar(
   toolbarX: number,
   toolbarY: number,
   viewportW: number,
   viewportH: number,
-): { x: number; y: number } {
-  const x = clamp(toolbarX, 12, viewportW - PANEL_WIDTH - 12);
-  const minY = 12;
-  const maxY = Math.max(minY, viewportH - PANEL_HEIGHT - 12);
-  const below = toolbarY + TOOLBAR_HEIGHT + PANEL_GAP;
-  const above = toolbarY - PANEL_HEIGHT - PANEL_GAP;
-  if (below <= maxY) {
-    return { x, y: below };
+): PanelPosition {
+  const x = clamp(toolbarX, EDGE_GAP, viewportW - PANEL_WIDTH - EDGE_GAP);
+  const safeBottom = Math.max(EDGE_GAP, viewportH - BOTTOM_GAP);
+  const below = clamp(toolbarY + TOOLBAR_HEIGHT + PANEL_GAP, EDGE_GAP, safeBottom);
+  const above = clamp(toolbarY - PANEL_GAP, EDGE_GAP, safeBottom);
+  const spaceBelow = safeBottom - below;
+  const spaceAbove = above - EDGE_GAP;
+
+  if (spaceBelow >= PANEL_MAX_HEIGHT || spaceBelow >= spaceAbove) {
+    return {
+      x,
+      y: below,
+      placement: 'below',
+      maxHeight: Math.min(PANEL_MAX_HEIGHT, spaceBelow),
+    };
   }
-  if (above >= minY) {
-    return { x, y: above };
-  }
-  const spaceBelow = viewportH - (toolbarY + TOOLBAR_HEIGHT) - 12;
-  const spaceAbove = toolbarY - 12;
-  return { x, y: clamp(spaceBelow >= spaceAbove ? below : above, minY, maxY) };
+  return {
+    x,
+    y: above,
+    placement: 'above',
+    maxHeight: Math.min(PANEL_MAX_HEIGHT, spaceAbove),
+  };
 }
