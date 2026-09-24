@@ -1,5 +1,6 @@
 const PANEL_WIDTH = 420;
 const PANEL_MAX_HEIGHT = 480;
+const PANEL_MIN_HEIGHT = 52;
 const TOOLBAR_HEIGHT = 40;
 const PANEL_GAP = 8;
 const EDGE_GAP = 12;
@@ -30,6 +31,21 @@ export function layoutPanelNearToolbar(
   const above = clamp(toolbarY - PANEL_GAP, EDGE_GAP, safeBottom);
   const spaceBelow = safeBottom - below;
   const spaceAbove = above - EDGE_GAP;
+  const spaceAtToolbar = Math.max(spaceBelow, spaceAbove);
+  const totalSafeSpace = Math.max(0, viewportH - BOTTOM_GAP);
+
+  // If neither side has room for a small panel, anchor it at the viewport top
+  // and use all space above the reserved bottom area. This may overlap the
+  // toolbar and relax the top edge gap, but avoids a zero-height panel whenever
+  // the viewport extends above the reserved bottom area.
+  if (spaceAtToolbar < PANEL_MIN_HEIGHT && totalSafeSpace > spaceAtToolbar) {
+    return {
+      x,
+      y: 0,
+      placement: 'below',
+      maxHeight: Math.min(PANEL_MAX_HEIGHT, totalSafeSpace),
+    };
+  }
 
   if (spaceBelow >= PANEL_MAX_HEIGHT || spaceBelow >= spaceAbove) {
     return {

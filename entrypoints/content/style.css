@@ -167,5 +167,6 @@
 }
 
 .tf-empty {
+  min-height: 52px;
   color: #a8a29e;
 }

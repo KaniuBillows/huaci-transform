@@ -510,12 +510,13 @@ try {
 
   // 靠近视口底部划词时，结果窗应在安全区域内；长内容只滚动正文
   await web.mouse.click(20, 400);
-  await web.evaluate(() => {
+  await web.evaluate((marker) => {
     const target = document.querySelector('#t');
+    target.textContent = marker;
     target.style.position = 'fixed';
     target.style.top = '720px';
     target.style.left = '40px';
-  });
+  }, api.longInputMarker);
   await web.evaluate(() => {
     const target = document.querySelector('#t');
     const range = document.createRange();
@@ -536,12 +537,8 @@ try {
     (want) =>
       document.querySelector('huaci-transform')?.shadowRoot?.querySelector('.tf-body')?.textContent?.includes(want),
     { timeout: 20000 },
-    api.expected,
+    api.longExpected,
   );
-  await web.evaluate(() => {
-    const body = document.querySelector('huaci-transform')?.shadowRoot?.querySelector('.tf-body');
-    body?.append(document.createTextNode(' 很长的翻译结果'.repeat(500)));
-  });
   const panelLayout = await web.evaluate(() => {
     const root = document.querySelector('huaci-transform')?.shadowRoot;
     const panel = root?.querySelector('.tf-panel');
