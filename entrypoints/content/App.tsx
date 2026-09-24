@@ -4,7 +4,7 @@ import { defaultCombination, modelForTask } from '../../lib/model_config';
 import { CONTEXT_INVALIDATED_HINT, isExtensionAlive } from '../../lib/runtime';
 import { loadSettings, onSettingsChanged } from '../../lib/storage';
 import type { AppSettings, ClientMessage, ServerEvent, TaskKind } from '../../lib/types';
-import { layoutPanelNearToolbar } from '../../lib/layout';
+import { layoutPanelNearToolbar, type PanelPosition } from '../../lib/layout';
 import { ResultPanel, type PanelState } from './ResultPanel';
 import { Toolbar } from './Toolbar';
 
@@ -19,12 +19,9 @@ interface TaskRequest {
   text: string;
   combinationId: string;
   modelId: string;
-  x: number;
-  y: number;
+  position: PanelPosition;
 }
 
-const PANEL_WIDTH = 420;
-const PANEL_HEIGHT = 280;
 const TOOLBAR_WIDTH = 160;
 const TOOLBAR_HEIGHT = 40;
 
@@ -45,8 +42,7 @@ function emptyPanel(req: TaskRequest): PanelState {
     text: req.text,
     combinationId: req.combinationId,
     modelId: req.modelId,
-    x: req.x,
-    y: req.y,
+    position: req.position,
     thinking: '',
     content: '',
     error: '',
@@ -207,6 +203,31 @@ export function ContentApp() {
     };
   }, [dismiss]);
 
+  useEffect(() => {
+    if (!sel) {
+      return;
+    }
+    const onResize = () => {
+      const toolbar = layoutPoint(sel.x, sel.y, TOOLBAR_WIDTH, TOOLBAR_HEIGHT);
+      setSel((prev) => (prev ? { ...prev, ...toolbar } : prev));
+      setPanel((prev) =>
+        prev
+          ? {
+              ...prev,
+              position: layoutPanelNearToolbar(
+                toolbar.x,
+                toolbar.y,
+                window.innerWidth,
+                window.innerHeight,
+              ),
+            }
+          : prev,
+      );
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, [sel?.x, sel?.y]);
+
   const run = (task: TaskKind) => {
     if (!sel || !settings) {
       return;
@@ -220,8 +241,7 @@ export function ContentApp() {
           text: sel.text,
           combinationId: '',
           modelId: '',
-          x: pos.x,
-          y: pos.y,
+          position: pos,
         }),
         loading: false,
         error: '请先在设置页创建组合配置',
@@ -237,8 +257,7 @@ export function ContentApp() {
           text: sel.text,
           combinationId: combination.id,
           modelId: '',
-          x: pos.x,
-          y: pos.y,
+          position: pos,
         }),
         loading: false,
         error: `当前组合没有已启用的${task === 'translate' ? '翻译' : '解释'}模型`,
@@ -251,8 +270,7 @@ export function ContentApp() {
       text: sel.text,
       combinationId: combination.id,
       modelId: model.id,
-      x: pos.x,
-      y: pos.y,
+      position: pos,
     });
   };
 
@@ -287,8 +305,7 @@ export function ContentApp() {
               text: panel.text,
               combinationId: panel.combinationId,
               modelId,
-              x: panel.x,
-              y: panel.y,
+              position: panel.position,
             })
           }
           onOpenOptions={() => {
@@ -300,8 +317,7 @@ export function ContentApp() {
                   text: panel.text,
                   combinationId: panel.combinationId,
                   modelId: panel.modelId,
-                  x: panel.x,
-                  y: panel.y,
+                  position: panel.position,
                 },
                 CONTEXT_INVALIDATED_HINT,
               );
@@ -317,8 +333,7 @@ export function ContentApp() {
                   text: panel.text,
                   combinationId: panel.combinationId,
                   modelId: panel.modelId,
-                  x: panel.x,
-                  y: panel.y,
+                  position: panel.position,
                 },
                 CONTEXT_INVALIDATED_HINT,
               );

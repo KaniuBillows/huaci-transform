@@ -507,6 +507,73 @@ try {
     .then(() => true)
     .catch(() => false);
   check('用量统计写入页脚', gotUsage);
+
+  // 靠近视口底部划词时，结果窗应在安全区域内；长内容只滚动正文
+  await web.mouse.click(20, 400);
+  await web.evaluate((marker) => {
+    const target = document.querySelector('#t');
+    target.textContent = marker;
+    target.style.position = 'fixed';
+    target.style.top = '720px';
+    target.style.left = '40px';
+  }, api.longInputMarker);
+  await web.evaluate(() => {
+    const target = document.querySelector('#t');
+    const range = document.createRange();
+    range.selectNodeContents(target);
+    window.getSelection()?.removeAllRanges();
+    window.getSelection()?.addRange(range);
+    const rect = target.getBoundingClientRect();
+    target.dispatchEvent(new MouseEvent('mouseup', {
+      bubbles: true,
+      clientX: rect.right,
+      clientY: rect.top + rect.height / 2,
+    }));
+  });
+  await web.waitForSelector('>>> .tf-toolbar');
+  const [bottomTranslateBtn] = await web.$$('>>> .tf-toolbar button');
+  await bottomTranslateBtn.click();
+  await web.waitForFunction(
+    (want) =>
+      document.querySelector('huaci-transform')?.shadowRoot?.querySelector('.tf-body')?.textContent?.includes(want),
+    { timeout: 20000 },
+    api.longExpected,
+  );
+  const panelLayout = await web.evaluate(() => {
+    const root = document.querySelector('huaci-transform')?.shadowRoot;
+    const panel = root?.querySelector('.tf-panel');
+    const body = root?.querySelector('.tf-body');
+    const rect = panel?.getBoundingClientRect();
+    if (body) {
+      body.scrollTop = body.scrollHeight;
+    }
+    return {
+      top: rect?.top,
+      bottom: rect?.bottom,
+      height: rect?.height,
+      viewportHeight: window.innerHeight,
+      scrollable: body ? body.scrollHeight > body.clientHeight && body.scrollTop > 0 : false,
+    };
+  });
+  check(
+    '靠近底部划词时弹窗保留 100px 底边距',
+    panelLayout.top >= 12 && panelLayout.bottom <= panelLayout.viewportHeight - 100,
+    JSON.stringify(panelLayout),
+  );
+  check(
+    '长翻译结果在最多 480px 的弹窗正文内滚动',
+    panelLayout.height <= 480 && panelLayout.scrollable,
+    JSON.stringify(panelLayout),
+  );
+  await web.setViewport({ width: 1280, height: 600 });
+  await web.waitForFunction(
+    () => document.querySelector('huaci-transform')?.shadowRoot?.querySelector('.tf-panel')?.getBoundingClientRect().bottom <= 500,
+    { timeout: 5000 },
+  );
+  const resizedBottom = await web.evaluate(
+    () => document.querySelector('huaci-transform')?.shadowRoot?.querySelector('.tf-panel')?.getBoundingClientRect().bottom,
+  );
+  check('窗口缩小时弹窗仍保留底边距', resizedBottom <= 500, `bottom=${resizedBottom}`);
 } finally {
   await browser.close();
   api.server.close();

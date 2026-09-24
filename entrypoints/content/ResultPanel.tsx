@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { PanelPosition } from '../../lib/layout';
 import { formatMoney } from '../../lib/number';
 import type { ModelConfig, ServerEvent, TaskKind } from '../../lib/types';
 import { useDisplayedText } from './use-displayed-text';
@@ -8,8 +9,7 @@ interface PanelState {
   text: string;
   combinationId: string;
   modelId: string;
-  x: number;
-  y: number;
+  position: PanelPosition;
   thinking: string;
   content: string;
   error: string;
@@ -111,7 +111,15 @@ export function ResultPanel(props: Props) {
   const groups = groupModels(props.models);
 
   return (
-    <section className="tf-panel" style={{ left: state.x, top: state.y }}>
+    <section
+      className="tf-panel"
+      style={{
+        left: state.position.x,
+        top: state.position.y,
+        maxHeight: state.position.maxHeight,
+        transform: state.position.placement === 'above' ? 'translateY(-100%)' : undefined,
+      }}
+    >
       <header className="tf-head">
         <select
           className="tf-select"
